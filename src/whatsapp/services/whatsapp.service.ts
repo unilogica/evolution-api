@@ -608,14 +608,31 @@ export class WAStartupService {
             autoDelete: false,
           });
 
-          const queueName = `${this.instanceName}.${event}`;
+          const queueName = process.env.RABBITMQ_QUEUE_FORMAT
+            ? process.env.RABBITMQ_QUEUE_FORMAT.replace(/%INSTANCE/, this.instanceName).replace(/%EVENT/, event)
+            : `${this.instanceName}.${event}`;
 
-          amqp.assertQueue(queueName, {
-            durable: true,
-            autoDelete: false,
-            arguments: {
-              'x-queue-type': 'quorum',
-            },
+          this.logger.verbose(`Creating RabbitMQ queue: ${queueName}`);
+
+          // Usar uma Promise para aguardar a confirmação da criação da fila antes
+          await new Promise((resolve, reject) => {
+            amqp.assertQueue(
+              queueName,
+              {
+                durable: true,
+                autoDelete: false,
+                arguments: {
+                  'x-queue-type': 'quorum',
+                },
+              },
+              (error) => {
+                if (error) {
+                  reject(error);
+                } else {
+                  resolve(true);
+                }
+              },
+            );
           });
 
           amqp.bindQueue(queueName, exchangeName, event);
